@@ -1,7 +1,6 @@
 import json
 import os
 from http.server import BaseHTTPRequestHandler, HTTPServer
-
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path == "/health":
