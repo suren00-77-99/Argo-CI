@@ -65,6 +65,7 @@ jobs:
     needs: build
     steps:
       - uses: actions/checkout@v4
+      - name: Build local images for scanning
         run: |
           TAG="v${{ github.run_number }}"
           docker build -t frontend:$TAG frontend
