@@ -68,13 +68,13 @@ jobs:
       - run: |
           docker build -t frontend:${GITHUB_SHA::12} frontend
           docker build -t backend:${GITHUB_SHA::12} backend
-      - uses: aquasecurity/trivy-action@0.33.1
+      - uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: frontend:${{ github.sha }}
           severity: CRITICAL,HIGH
           exit-code: "1"
           ignore-unfixed: true
-      - uses: aquasecurity/trivy-action@0.33.1
+      - uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: backend:${{ github.sha }}
           severity: CRITICAL,HIGH
