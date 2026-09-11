@@ -113,7 +113,6 @@ jobs:
           docker build -t "$ECR_REGISTRY/$FRONTEND_REPOSITORY:$VERSION_TAG" -t "$ECR_REGISTRY/$FRONTEND_REPOSITORY:latest" frontend
           docker push "$ECR_REGISTRY/$FRONTEND_REPOSITORY:$VERSION_TAG"
           docker push "$ECR_REGISTRY/$FRONTEND_REPOSITORY:latest"
-          
           # 3. Build and push Backend with both tags
           echo "Building and pushing Backend..."
           docker build -t "$ECR_REGISTRY/$BACKEND_REPOSITORY:$VERSION_TAG" -t "$ECR_REGISTRY/$BACKEND_REPOSITORY:latest" backend
