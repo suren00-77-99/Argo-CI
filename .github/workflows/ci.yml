@@ -108,7 +108,6 @@ jobs:
           echo "Checking/creating ECR repositories..."
           aws ecr create-repository --repository-name "$FRONTEND_REPOSITORY" --region "$AWS_REGION" || echo "Frontend repository already exists."
           aws ecr create-repository --repository-name "$BACKEND_REPOSITORY" --region "$AWS_REGION" || echo "Backend repository already exists."
-          
           # 2. Build and push Frontend with both tags
           echo "Building and pushing Frontend..."
           docker build -t "$ECR_REGISTRY/$FRONTEND_REPOSITORY:$VERSION_TAG" -t "$ECR_REGISTRY/$FRONTEND_REPOSITORY:latest" frontend
