@@ -65,18 +65,21 @@ jobs:
     needs: build
     steps:
       - uses: actions/checkout@v4
-      - run: |
-          docker build -t frontend:${GITHUB_SHA::12} frontend
-          docker build -t backend:${GITHUB_SHA::12} backend
+        run: |
+          TAG="v${{ github.run_number }}"
+          docker build -t frontend:$TAG frontend
+          docker build -t backend:$TAG backend
       - uses: aquasecurity/trivy-action@v0.36.0
         with:
-          image-ref: frontend:${{ github.sha }}
+          scan-type: 'image'
+          image-ref: frontend:v${{ github.run_number }}
           severity: CRITICAL,HIGH
           exit-code: "1"
           ignore-unfixed: true
       - uses: aquasecurity/trivy-action@v0.36.0
         with:
-          image-ref: backend:${{ github.sha }}
+          scan-type: 'image'
+          image-ref: backend:v${{ github.run_number }}
           severity: CRITICAL,HIGH
           exit-code: "1"
           ignore-unfixed: true
@@ -92,12 +95,20 @@ jobs:
           role-to-assume: ${{ secrets.AWS_GITHUB_ACTIONS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
       - uses: aws-actions/amazon-ecr-login@v2
-      - run: |
-          TAG=${GITHUB_SHA::12}
-          docker build -t "$ECR_REGISTRY/$FRONTEND_REPOSITORY:$TAG" frontend
-          docker build -t "$ECR_REGISTRY/$BACKEND_REPOSITORY:$TAG" backend
-          docker push "$ECR_REGISTRY/$FRONTEND_REPOSITORY:$TAG"
-          docker push "$ECR_REGISTRY/$BACKEND_REPOSITORY:$TAG"
+        run: |
+          VERSION_TAG="v${{ github.run_number }}"
+          
+          # Build Frontend with both tags
+          docker build -t "$ECR_REGISTRY/$FRONTEND_REPOSITORY:$VERSION_TAG" -t "$ECR_REGISTRY/$FRONTEND_REPOSITORY:latest" frontend
+          # Push Frontend tags
+          docker push "$ECR_REGISTRY/$FRONTEND_REPOSITORY:$VERSION_TAG"
+          docker push "$ECR_REGISTRY/$FRONTEND_REPOSITORY:latest"
+          
+          # Build Backend with both tags
+          docker build -t "$ECR_REGISTRY/$BACKEND_REPOSITORY:$VERSION_TAG" -t "$ECR_REGISTRY/$BACKEND_REPOSITORY:latest" backend
+          # Push Backend tags
+          docker push "$ECR_REGISTRY/$BACKEND_REPOSITORY:$VERSION_TAG"
+          docker push "$ECR_REGISTRY/$BACKEND_REPOSITORY:latest"
 
   update-gitops:
     name: Update CD Repository
