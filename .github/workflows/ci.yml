@@ -104,17 +104,23 @@ jobs:
         run: |
           VERSION_TAG="v${{ github.run_number }}"
           
-          # Build Frontend with both tags
+          # 1. Automatically create ECR repositories if they do not exist yet
+          echo "Checking/creating ECR repositories..."
+          aws ecr create-repository --repository-name "$FRONTEND_REPOSITORY" --region "$AWS_REGION" || echo "Frontend repository already exists."
+          aws ecr create-repository --repository-name "$BACKEND_REPOSITORY" --region "$AWS_REGION" || echo "Backend repository already exists."
+          
+          # 2. Build and push Frontend with both tags
+          echo "Building and pushing Frontend..."
           docker build -t "$ECR_REGISTRY/$FRONTEND_REPOSITORY:$VERSION_TAG" -t "$ECR_REGISTRY/$FRONTEND_REPOSITORY:latest" frontend
-          # Push Frontend tags
           docker push "$ECR_REGISTRY/$FRONTEND_REPOSITORY:$VERSION_TAG"
           docker push "$ECR_REGISTRY/$FRONTEND_REPOSITORY:latest"
           
-          # Build Backend with both tags
+          # 3. Build and push Backend with both tags
+          echo "Building and pushing Backend..."
           docker build -t "$ECR_REGISTRY/$BACKEND_REPOSITORY:$VERSION_TAG" -t "$ECR_REGISTRY/$BACKEND_REPOSITORY:latest" backend
-          # Push Backend tags
           docker push "$ECR_REGISTRY/$BACKEND_REPOSITORY:$VERSION_TAG"
           docker push "$ECR_REGISTRY/$BACKEND_REPOSITORY:latest"
+
 
   update-gitops:
     name: Update CD Repository
