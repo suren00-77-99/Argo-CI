@@ -136,17 +136,29 @@ jobs:
 
       - name: Update image tags
         env:
-          TAG: ${{ github.sha }}
+          REVISION: ${{ github.run_number }}
         run: |
-          TAG="${TAG::12}"
-          sed -i "s/tag:.*/tag: $TAG/" cd-repo/environments/dev/frontend-values.yaml
-          sed -i "s/tag:.*/tag: $TAG/" cd-repo/environments/dev/backend-values.yaml
+          sed -i "s/^  tag:.*/  tag: \"latest\"/" \
+            cd-repo/environments/dev/frontend-values.yaml
+
+          sed -i "s/^  tag:.*/  tag: \"latest\"/" \
+            cd-repo/environments/dev/backend-values.yaml
+
+          sed -i "s/^  revision:.*/  revision: \"$REVISION\"/" \
+            cd-repo/environments/dev/frontend-values.yaml
+
+          sed -i "s/^  revision:.*/  revision: \"$REVISION\"/" \
+            cd-repo/environments/dev/backend-values.yaml
 
       - name: Commit GitOps change
         working-directory: cd-repo
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add environments/dev/frontend-values.yaml environments/dev/backend-values.yaml
-          git commit -m "chore: deploy image ${GITHUB_SHA::12}" || exit 0
+
+          git add environments/dev/frontend-values.yaml \
+                  environments/dev/backend-values.yaml
+
+          git commit -m "chore: deploy image latest - run ${GITHUB_RUN_NUMBER}" || exit 0
+
           git push
