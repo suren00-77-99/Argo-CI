@@ -1,4 +1,4 @@
-name: CI - Build and Trivy Security Scan
+name: CI - Docker Build and Trivy Scan
 
 on:
   push:
@@ -20,12 +20,12 @@ env:
   BACKEND_IMAGE: backend
   IMAGE_TAG: ${{ github.sha }}
 
-  # Pin the Trivy CLI version
+  # Pinned Trivy CLI version
   TRIVY_VERSION: v0.74.0
 
 jobs:
   build-and-scan:
-    name: Build Docker Images and Scan
+    name: Build and Security Scan
     runs-on: ubuntu-24.04
 
     steps:
@@ -44,7 +44,7 @@ jobs:
       # --------------------------------------------------
       # 3. Build frontend image
       # --------------------------------------------------
-      - name: Build frontend Docker image
+      - name: Build frontend image
         run: |
           docker build \
             --no-cache \
@@ -54,7 +54,7 @@ jobs:
       # --------------------------------------------------
       # 4. Build backend image
       # --------------------------------------------------
-      - name: Build backend Docker image
+      - name: Build backend image
         run: |
           docker build \
             --no-cache \
@@ -73,7 +73,7 @@ jobs:
             ${{ env.BACKEND_IMAGE }}:${{ env.IMAGE_TAG }}
 
       # --------------------------------------------------
-      # 6. Verify Python package versions inside images
+      # 6. Verify Python packages in frontend
       # --------------------------------------------------
       - name: Verify frontend Python packages
         run: |
@@ -81,6 +81,9 @@ jobs:
             ${{ env.FRONTEND_IMAGE }}:${{ env.IMAGE_TAG }} \
             python -m pip show msgpack setuptools
 
+      # --------------------------------------------------
+      # 7. Verify Python packages in backend
+      # --------------------------------------------------
       - name: Verify backend Python packages
         run: |
           docker run --rm \
@@ -88,9 +91,21 @@ jobs:
             python -m pip show msgpack setuptools
 
       # --------------------------------------------------
-      # 7. Run Trivy scan on frontend
+      # 8. Install pinned Trivy version
       # --------------------------------------------------
-      - name: Trivy scan frontend image
+      - name: Install Trivy
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          version: ${{ env.TRIVY_VERSION }}
+          image-ref: alpine:3.20
+          format: table
+          exit-code: '0'
+
+      # --------------------------------------------------
+      # 9. Scan frontend image
+      # --------------------------------------------------
+      - name: Scan frontend image with Trivy
+        id: trivy-frontend
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           version: ${{ env.TRIVY_VERSION }}
@@ -104,9 +119,10 @@ jobs:
           scanners: vuln
 
       # --------------------------------------------------
-      # 8. Run Trivy scan on backend
+      # 10. Scan backend image
       # --------------------------------------------------
-      - name: Trivy scan backend image
+      - name: Scan backend image with Trivy
+        id: trivy-backend
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           version: ${{ env.TRIVY_VERSION }}
@@ -120,19 +136,19 @@ jobs:
           scanners: vuln
 
       # --------------------------------------------------
-      # 9. Upload frontend scan report
+      # 11. Upload frontend SARIF only if it exists
       # --------------------------------------------------
       - name: Upload frontend Trivy report
-        if: always()
+        if: always() && hashFiles('trivy-frontend.sarif') != ''
         uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: trivy-frontend.sarif
 
       # --------------------------------------------------
-      # 10. Upload backend scan report
+      # 12. Upload backend SARIF only if it exists
       # --------------------------------------------------
       - name: Upload backend Trivy report
-        if: always()
+        if: always() && hashFiles('trivy-backend.sarif') != ''
         uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: trivy-backend.sarif
