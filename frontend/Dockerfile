@@ -6,18 +6,17 @@ ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
 # Update operating-system packages
-RUN python -m pip uninstall -y msgpack setuptools || true \
-    && find /usr/local/lib/python3.12/site-packages \
-       -maxdepth 1 \
-       \( -iname 'msgpack*' -o -iname 'setuptools*' \) \
-       -exec rm -rf {} +
+RUN apt-get update \
+    && apt-get upgrade -y \
+    && apt-get dist-upgrade -y \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
 
-# Install clean, fixed versions
+COPY requirements.txt .
+
 RUN python -m pip install --no-cache-dir --upgrade pip \
-    && python -m pip install --no-cache-dir --no-compile \
-       "msgpack==1.2.2" \
-       "setuptools==84.0.0" \
-    && python -m pip install --no-cache-dir --no-compile -r requirements.txt
+    && python -m pip install --no-cache-dir --no-compile -r requirements.txt \
+    && python -m pip install --no-cache-dir --no-compile --upgrade \
 
 COPY app.py .
 
