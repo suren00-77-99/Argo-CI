@@ -46,46 +46,82 @@ jobs:
       - run: pip install -r frontend/requirements.txt -r backend/requirements.txt
       - run: pytest frontend/tests backend/tests -q
 
-  build:
-    name: Build Images
-    runs-on: ubuntu-latest
+    build:
+    name: Build Docker Images
     needs: unit-test
-    outputs:
-      tag: ${{ steps.meta.outputs.tag }}
+    runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v4
-      - id: meta
-        run: echo "tag=${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
-      - run: |
-          docker build -t "$ECR_REGISTRY/$FRONTEND_REPOSITORY:${{ steps.meta.outputs.tag }}" frontend
-          docker build -t "$ECR_REGISTRY/$BACKEND_REPOSITORY:${{ steps.meta.outputs.tag }}" backend
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build frontend image
+        run: |
+          docker build \
+            --pull \
+            --no-cache \
+            -t frontend:v${{ github.run_number }} \
+            -f frontend/Dockerfile \
+            .
+
+      - name: Build backend image
+        run: |
+          docker build \
+            --pull \
+            --no-cache \
+            -t backend:v${{ github.run_number }} \
+            -f backend/Dockerfile \
+            .
 
   scan:
-    name: Scan Images
-    runs-on: ubuntu-latest
+    name: Trivy Security Scan
     needs: build
-    steps:
-      - uses: actions/checkout@v4
-      - name: Build local images for scanning
-        run: |
-          TAG="v${{ github.run_number }}"
-          docker build -t frontend:$TAG frontend
-          docker build -t backend:$TAG backend
-      - uses: aquasecurity/trivy-action@v0.36.0
-        with:
-          scan-type: 'image'
-          image-ref: frontend:v${{ github.run_number }}
-          severity: CRITICAL,HIGH
-          exit-code: "1"
-          ignore-unfixed: true
-      - uses: aquasecurity/trivy-action@v0.36.0
-        with:
-          scan-type: 'image'
-          image-ref: backend:v${{ github.run_number }}
-          severity: CRITICAL,HIGH
-          exit-code: "1"
-          ignore-unfixed: true
+    runs-on: ubuntu-latest
 
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build frontend image for scanning
+        run: |
+          docker build \
+            --pull \
+            --no-cache \
+            -t frontend:v${{ github.run_number }} \
+            -f frontend/Dockerfile \
+            .
+
+      - name: Build backend image for scanning
+        run: |
+          docker build \
+            --pull \
+            --no-cache \
+            -t backend:v${{ github.run_number }} \
+            -f backend/Dockerfile \
+            .
+
+      - name: Scan frontend image
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: frontend:v${{ github.run_number }}
+          format: table
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+          vuln-type: os,library
+          scanners: vuln
+
+      - name: Scan backend image
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: backend:v${{ github.run_number }}
+          format: table
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+          vuln-type: os,library
+          scanners: vuln
+          
   push-ecr:
     name: Push to ECR
     runs-on: ubuntu-latest
