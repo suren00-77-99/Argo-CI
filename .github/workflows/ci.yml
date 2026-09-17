@@ -1,5 +1,8 @@
-name: CI - Docker Build and Trivy Scan
+name: CI - Build, Test and Security Scan
 
+# ==========================================================
+# Pipeline triggers
+# ==========================================================
 on:
   push:
     branches:
@@ -11,144 +14,232 @@ on:
       - main
       - develop
 
+# ==========================================================
+# Permissions
+# ==========================================================
 permissions:
   contents: read
   security-events: write
 
+# ==========================================================
+# Global environment variables
+# ==========================================================
 env:
   FRONTEND_IMAGE: frontend
   BACKEND_IMAGE: backend
+
+  # Unique image tag for every commit
   IMAGE_TAG: ${{ github.sha }}
 
-  # Pinned Trivy CLI version
+  # Pinned stable Trivy CLI version
   TRIVY_VERSION: v0.74.0
 
+# ==========================================================
+# Job
+# ==========================================================
 jobs:
   build-and-scan:
-    name: Build and Security Scan
+    name: Build, Test and Security Scan
     runs-on: ubuntu-24.04
 
     steps:
-      # --------------------------------------------------
-      # 1. Checkout source code
-      # --------------------------------------------------
-      - name: Checkout source code
+
+      # ====================================================
+      # STAGE 1 - Checkout source code
+      # ====================================================
+      - name: Stage 1 - Checkout source code
         uses: actions/checkout@v4
 
-      # --------------------------------------------------
-      # 2. Set up Docker Buildx
-      # --------------------------------------------------
-      - name: Set up Docker Buildx
+      # ====================================================
+      # STAGE 2 - Set up Python
+      # ====================================================
+      - name: Stage 2 - Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            frontend/requirements.txt
+            backend/requirements.txt
+
+      # ====================================================
+      # STAGE 3 - Install frontend dependencies
+      # ====================================================
+      - name: Stage 3 - Install frontend dependencies
+        working-directory: frontend
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      # ====================================================
+      # STAGE 4 - Install backend dependencies
+      # ====================================================
+      - name: Stage 4 - Install backend dependencies
+        working-directory: backend
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      # ====================================================
+      # STAGE 5 - Run frontend linting
+      # ====================================================
+      - name: Stage 5 - Lint frontend
+        working-directory: frontend
+        run: |
+          python -m flake8 app.py
+
+      # ====================================================
+      # STAGE 6 - Run backend linting
+      # ====================================================
+      - name: Stage 6 - Lint backend
+        working-directory: backend
+        run: |
+          python -m flake8 app.py
+
+      # ====================================================
+      # STAGE 7 - Run frontend unit tests
+      # ====================================================
+      - name: Stage 7 - Test frontend
+        working-directory: frontend
+        run: |
+          python -m pytest -v
+
+      # ====================================================
+      # STAGE 8 - Run backend unit tests
+      # ====================================================
+      - name: Stage 8 - Test backend
+        working-directory: backend
+        run: |
+          python -m pytest -v
+
+      # ====================================================
+      # STAGE 9 - Set up Docker Buildx
+      # ====================================================
+      - name: Stage 9 - Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # --------------------------------------------------
-      # 3. Build frontend image
-      # --------------------------------------------------
-      - name: Build frontend image
+      # ====================================================
+      # STAGE 10 - Build frontend Docker image
+      # ====================================================
+      - name: Stage 10 - Build frontend Docker image
         run: |
           docker build \
             --no-cache \
             -t ${{ env.FRONTEND_IMAGE }}:${{ env.IMAGE_TAG }} \
             ./frontend
 
-      # --------------------------------------------------
-      # 4. Build backend image
-      # --------------------------------------------------
-      - name: Build backend image
+      # ====================================================
+      # STAGE 11 - Build backend Docker image
+      # ====================================================
+      - name: Stage 11 - Build backend Docker image
         run: |
           docker build \
             --no-cache \
             -t ${{ env.BACKEND_IMAGE }}:${{ env.IMAGE_TAG }} \
             ./backend
 
-      # --------------------------------------------------
-      # 5. Verify image IDs
-      # --------------------------------------------------
-      - name: Verify Docker images
+      # ====================================================
+      # STAGE 12 - Verify Docker images exist
+      # ====================================================
+      - name: Stage 12 - Verify Docker images
         run: |
+          echo "Frontend image:"
           docker image inspect \
             ${{ env.FRONTEND_IMAGE }}:${{ env.IMAGE_TAG }}
 
+          echo "Backend image:"
           docker image inspect \
             ${{ env.BACKEND_IMAGE }}:${{ env.IMAGE_TAG }}
 
-      # --------------------------------------------------
-      # 6. Verify Python packages in frontend
-      # --------------------------------------------------
-      - name: Verify frontend Python packages
+      # ====================================================
+      # STAGE 13 - Verify frontend Python package versions
+      # ====================================================
+      - name: Stage 13 - Verify frontend Python packages
         run: |
           docker run --rm \
             ${{ env.FRONTEND_IMAGE }}:${{ env.IMAGE_TAG }} \
             python -m pip show msgpack setuptools
 
-      # --------------------------------------------------
-      # 7. Verify Python packages in backend
-      # --------------------------------------------------
-      - name: Verify backend Python packages
+      # ====================================================
+      # STAGE 14 - Verify backend Python package versions
+      # ====================================================
+      - name: Stage 14 - Verify backend Python packages
         run: |
           docker run --rm \
             ${{ env.BACKEND_IMAGE }}:${{ env.IMAGE_TAG }} \
             python -m pip show msgpack setuptools
 
-      # --------------------------------------------------
-      # 8. Install pinned Trivy version
-      # --------------------------------------------------
-      - name: Install Trivy
-        uses: aquasecurity/trivy-action@v0.36.0
-        with:
-          version: ${{ env.TRIVY_VERSION }}
-          image-ref: alpine:3.20
-          format: table
-          exit-code: '0'
+      # ====================================================
+      # STAGE 15 - Verify Trivy version
+      # ====================================================
+      - name: Stage 15 - Verify Trivy version
+        run: |
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            aquasec/trivy:${{ env.TRIVY_VERSION }} \
+            --version
 
-      # --------------------------------------------------
-      # 9. Scan frontend image
-      # --------------------------------------------------
-      - name: Scan frontend image with Trivy
-        id: trivy-frontend
+      # ====================================================
+      # STAGE 16 - Scan frontend Docker image
+      # ====================================================
+      - name: Stage 16 - Scan frontend image with Trivy
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           version: ${{ env.TRIVY_VERSION }}
           image-ref: ${{ env.FRONTEND_IMAGE }}:${{ env.IMAGE_TAG }}
           format: sarif
           output: trivy-frontend.sarif
-          exit-code: '0'
-          ignore-unfixed: false
+          exit-code: "1"
+          ignore-unfixed: true
           vuln-type: os,library
           severity: HIGH,CRITICAL
           scanners: vuln
 
-      # --------------------------------------------------
-      # 10. Scan backend image
-      # --------------------------------------------------
-      - name: Scan backend image with Trivy
-        id: trivy-backend
+      # ====================================================
+      # STAGE 17 - Scan backend Docker image
+      # ====================================================
+      - name: Stage 17 - Scan backend image with Trivy
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           version: ${{ env.TRIVY_VERSION }}
           image-ref: ${{ env.BACKEND_IMAGE }}:${{ env.IMAGE_TAG }}
           format: sarif
           output: trivy-backend.sarif
-          exit-code: '0'
-          ignore-unfixed: false
+          exit-code: "1"
+          ignore-unfixed: true
           vuln-type: os,library
           severity: HIGH,CRITICAL
           scanners: vuln
 
-      # --------------------------------------------------
-      # 11. Upload frontend SARIF only if it exists
-      # --------------------------------------------------
-      - name: Upload frontend Trivy report
+      # ====================================================
+      # STAGE 18 - Upload frontend SARIF report
+      # ====================================================
+      - name: Stage 18 - Upload frontend Trivy report
         if: always() && hashFiles('trivy-frontend.sarif') != ''
         uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: trivy-frontend.sarif
+          category: trivy-frontend
 
-      # --------------------------------------------------
-      # 12. Upload backend SARIF only if it exists
-      # --------------------------------------------------
-      - name: Upload backend Trivy report
+      # ====================================================
+      # STAGE 19 - Upload backend SARIF report
+      # ====================================================
+      - name: Stage 19 - Upload backend Trivy report
         if: always() && hashFiles('trivy-backend.sarif') != ''
         uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: trivy-backend.sarif
+          category: trivy-backend
+
+      # ====================================================
+      # STAGE 20 - Upload SARIF reports as workflow artifacts
+      # ====================================================
+      - name: Stage 20 - Upload Trivy reports as artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-security-reports
+          path: |
+            trivy-frontend.sarif
+            trivy-backend.sarif
+          if-no-files-found: ignore
