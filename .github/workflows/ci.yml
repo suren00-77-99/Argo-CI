@@ -46,7 +46,7 @@ jobs:
       - run: pip install -r frontend/requirements.txt -r backend/requirements.txt
       - run: pytest frontend/tests backend/tests -q
 
-    build:
+  build:
     name: Build Docker Images
     needs: unit-test
     runs-on: ubuntu-latest
@@ -121,7 +121,7 @@ jobs:
           exit-code: "1"
           vuln-type: os,library
           scanners: vuln
-          
+
   push-ecr:
     name: Push to ECR
     runs-on: ubuntu-latest
