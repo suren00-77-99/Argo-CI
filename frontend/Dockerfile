@@ -12,9 +12,15 @@ RUN apt-get update \
 
 COPY requirements.txt .
 
-RUN pip install --no-cache-dir --upgrade pip setuptools \
-    && pip install --no-cache-dir -r requirements.txt \
-    && pip install --no-cache-dir --upgrade msgpack
+RUN python -m pip uninstall -y msgpack setuptools || true \
+    && python -m pip install --no-cache-dir --upgrade pip \
+    && python -m pip install --no-cache-dir --no-compile \
+       "setuptools>=78.1.1" \
+       "msgpack>=1.2.1" \
+    && python -m pip install --no-cache-dir --no-compile -r requirements.txt \
+    && python -m pip install --no-cache-dir --no-compile --upgrade \
+       "setuptools>=78.1.1" \
+       "msgpack>=1.2.1"
 
 COPY app.py .
 
