@@ -10,14 +10,18 @@ RUN apt-get update \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-COPY frontend/requirements.txt ./requirements.txt
+COPY requirements.txt .
 
 RUN pip install --no-cache-dir --upgrade pip setuptools \
     && pip install --no-cache-dir -r requirements.txt \
     && pip install --no-cache-dir --upgrade msgpack
 
-COPY frontend/ .
+COPY app.py .
 
-EXPOSE 5000
+RUN chown -R 10001:10001 /app
+
+USER 10001
+
+EXPOSE 8000
 
 CMD ["python", "app.py"]
