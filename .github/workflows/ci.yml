@@ -289,28 +289,50 @@ jobs:
 
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
 
-    outputs:
-      ecr_registry: ${{ steps.ecr-details.outputs.ecr_registry }}
-      frontend_repository: ${{ steps.ecr-details.outputs.frontend_repository }}
-      backend_repository: ${{ steps.ecr-details.outputs.backend_repository }}
+    permissions:
+      id-token: write
+      contents: read
+
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
+      AWS_ROLE_ARN: ${{ vars.AWS_ROLE_ARN }}
 
     steps:
-      - name: Configure AWS credentials using GitHub OIDC
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Validate AWS variables
+        run: |
+          if [ -z "$AWS_REGION" ]; then
+            echo "AWS_REGION is missing"
+            exit 1
+          fi
+
+          if [ -z "$AWS_ACCOUNT_ID" ]; then
+            echo "AWS_ACCOUNT_ID is missing"
+            exit 1
+          fi
+
+          if [ -z "$AWS_ROLE_ARN" ]; then
+            echo "AWS_ROLE_ARN is missing"
+            exit 1
+          fi
+
+          echo "AWS_REGION=$AWS_REGION"
+          echo "AWS_ACCOUNT_ID=$AWS_ACCOUNT_ID"
+          echo "AWS_ROLE_ARN is configured"
+
+      - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
+          audience: sts.amazonaws.com
 
       - name: Verify AWS identity
         run: |
           aws sts get-caller-identity
-
-      - name: Set ECR details
-        id: ecr-details
-        run: |
-          echo "ecr_registry=${{ env.ECR_REGISTRY }}" >> "$GITHUB_OUTPUT"
-          echo "frontend_repository=${{ env.FRONTEND_REPOSITORY }}" >> "$GITHUB_OUTPUT"
-          echo "backend_repository=${{ env.BACKEND_REPOSITORY }}" >> "$GITHUB_OUTPUT"
 
   # ==========================================================
   # STAGE 6 - CREATE ECR REPOSITORIES IF NOT PRESENT
