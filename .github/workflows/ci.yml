@@ -57,8 +57,8 @@ jobs:
       - id: meta
         run: echo "tag=${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
       - run: |
-          docker build -t "$ECR_REGISTRY/$FRONTEND_REPOSITORY:${{ steps.meta.outputs.tag }}" frontend
-          docker build -t "$ECR_REGISTRY/$BACKEND_REPOSITORY:${{ steps.meta.outputs.tag }}" backend
+          docker build --no-cache -t "$ECR_REGISTRY/$FRONTEND_REPOSITORY:${{ steps.meta.outputs.tag }}" frontend
+          docker build --no-cache -t "$ECR_REGISTRY/$BACKEND_REPOSITORY:${{ steps.meta.outputs.tag }}" backend
   scan:
     name: Scan Images
     runs-on: ubuntu-latest
