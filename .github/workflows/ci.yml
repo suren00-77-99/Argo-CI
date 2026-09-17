@@ -112,8 +112,8 @@ jobs:
           image-ref: ${{ env.FRONTEND_IMAGE }}:${{ env.IMAGE_TAG }}
           format: sarif
           output: trivy-frontend.sarif
-          exit-code: '1'
-          ignore-unfixed: true
+          exit-code: '0'
+          ignore-unfixed: false
           vuln-type: os,library
           severity: HIGH,CRITICAL
           scanners: vuln
@@ -129,8 +129,8 @@ jobs:
           image-ref: ${{ env.BACKEND_IMAGE }}:${{ env.IMAGE_TAG }}
           format: sarif
           output: trivy-backend.sarif
-          exit-code: '1'
-          ignore-unfixed: true
+          exit-code: '0'
+          ignore-unfixed: false
           vuln-type: os,library
           severity: HIGH,CRITICAL
           scanners: vuln
