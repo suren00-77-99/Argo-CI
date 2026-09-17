@@ -139,7 +139,7 @@ jobs:
             python -c "import msgpack, setuptools; print('msgpack:', msgpack.__version__); print('setuptools:', setuptools.__version__)"
 
       - name: Scan frontend image
-        uses: aquasecurity/trivy-action@0.36.0
+        uses: aquasecurity/trivy-action@0.28.0
         with:
           scan-type: image
           image-ref: frontend:v${{ github.run_number }}
@@ -150,7 +150,7 @@ jobs:
           scanners: vuln
 
       - name: Scan backend image
-        uses: aquasecurity/trivy-action@0.36.0
+        uses: aquasecurity/trivy-action@0.28.0
         with:
           scan-type: image
           image-ref: backend:v${{ github.run_number }}
