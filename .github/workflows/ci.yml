@@ -68,8 +68,8 @@ jobs:
       - name: Build local images for scanning
         run: |
           TAG="v${{ github.run_number }}"
-          docker build --pull --no-cache -t frontend:$TAG frontend
-          docker build  -t backend:$TAG backend
+          docker build --no-cache -t frontend:$TAG frontend
+          docker build --no-cache -t backend:$TAG backend
       - uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: 'image'
