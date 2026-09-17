@@ -14,9 +14,12 @@ RUN apt-get update \
 
 COPY requirements.txt .
 
+# Install Python dependencies
 RUN python -m pip install --no-cache-dir --upgrade pip \
     && python -m pip install --no-cache-dir --no-compile -r requirements.txt \
     && python -m pip install --no-cache-dir --no-compile --upgrade \
+       "setuptools>=78.1.1" \
+       "msgpack>=1.2.1"
 
 COPY app.py .
 
@@ -24,6 +27,6 @@ RUN chown -R 10001:10001 /app
 
 USER 10001
 
-EXPOSE 8000
+EXPOSE 8080
 
 CMD ["python", "app.py"]
