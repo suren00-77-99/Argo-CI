@@ -101,7 +101,7 @@ jobs:
             .
 
       - name: Scan frontend image
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: frontend:v${{ github.run_number }}
           format: table
@@ -112,7 +112,7 @@ jobs:
           scanners: vuln
 
       - name: Scan backend image
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: backend:v${{ github.run_number }}
           format: table
