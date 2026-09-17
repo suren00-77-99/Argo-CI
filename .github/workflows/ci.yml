@@ -12,10 +12,8 @@ env:
   AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
   ECR_REGISTRY: ${{ vars.ECR_REGISTRY }}
   AWS_GITHUB_ROLE_ARN: ${{ vars.AWS_GITHUB_ROLE_ARN }}
-
   FRONTEND_REPOSITORY: gitops-demo-frontend
   BACKEND_REPOSITORY: gitops-demo-backend
-
   CD_REPOSITORY: suren00-77-99/Argo-CD
   CD_BRANCH: main
 
@@ -24,211 +22,108 @@ permissions:
   id-token: write
 
 jobs:
-
   lint-syntax:
     name: Lint and Syntax Check
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout source code
-        uses: actions/checkout@v4
-
-      - name: Setup Python
-        uses: actions/setup-python@v6
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
-
-      - name: Install lint tools
-        run: |
-          python -m pip install --upgrade pip
-          pip install ruff
-
-      - name: Run Ruff
-        run: |
-          ruff check frontend backend
-
-      - name: Check Python syntax
-        run: |
-          python -m compileall frontend backend
-
+      - run: pip install ruff
+      - run: ruff check frontend backend
+      - run: python -m compileall frontend backend
 
   unit-test:
-    name: Unit Tests
+    name: Unit Test
     runs-on: ubuntu-latest
     needs: lint-syntax
-
     steps:
-      - name: Checkout source code
-        uses: actions/checkout@v4
-
-      - name: Setup Python
-        uses: actions/setup-python@v6
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r frontend/requirements.txt
-          pip install -r backend/requirements.txt
-
-      - name: Run unit tests
-        run: |
-          pytest frontend/tests backend/tests -q
-
+      - run: pip install -r frontend/requirements.txt -r backend/requirements.txt
+      - run: pytest frontend/tests backend/tests -q
 
   build:
-    name: Build Docker Images
+    name: Build Images
     runs-on: ubuntu-latest
     needs: unit-test
-
+    outputs:
+      tag: ${{ steps.meta.outputs.tag }}
     steps:
-      - name: Checkout source code
-        uses: actions/checkout@v4
-
-      - name: Set image tag
-        run: |
-          echo "IMAGE_TAG=v${GITHUB_RUN_NUMBER}" >> "$GITHUB_ENV"
-
-      - name: Build frontend image
-        run: |
-          docker build --pull --no-cache \
-            -t frontend:${IMAGE_TAG} \
-            frontend
-
-      - name: Build backend image
-        run: |
-          docker build --pull --no-cache \
-            -t backend:${IMAGE_TAG} \
-            backend
-
-
+      - uses: actions/checkout@v4
+      - id: meta
+        run: echo "tag=${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
+      - run: |
+          docker build -t "$ECR_REGISTRY/$FRONTEND_REPOSITORY:${{ steps.meta.outputs.tag }}" frontend
+          docker build -t "$ECR_REGISTRY/$BACKEND_REPOSITORY:${{ steps.meta.outputs.tag }}" backend
   scan:
-    name: Trivy Security Scan
+    name: Scan Images
     runs-on: ubuntu-latest
     needs: build
-
     steps:
-      - name: Checkout source code
-        uses: actions/checkout@v4
-
-      - name: Set image tag
+      - uses: actions/checkout@v4
+      - name: Build local images for scanning
         run: |
-          echo "IMAGE_TAG=v${GITHUB_RUN_NUMBER}" >> "$GITHUB_ENV"
-
-      - name: Build frontend image for scanning
-        run: |
-          docker build --pull --no-cache \
-            -t frontend:${IMAGE_TAG} \
-            frontend
-
-      - name: Build backend image for scanning
-        run: |
-          docker build --pull --no-cache \
-            -t backend:${IMAGE_TAG} \
-            backend
-
-      - name: Verify frontend Python packages
-        run: |
-          docker run --rm frontend:${IMAGE_TAG} \
-            python -c "import msgpack, setuptools; print('msgpack:', msgpack.__version__); print('setuptools:', setuptools.__version__)"
-
-      - name: Verify backend Python packages
-        run: |
-          docker run --rm backend:${IMAGE_TAG} \
-            python -c "import msgpack, setuptools; print('msgpack:', msgpack.__version__); print('setuptools:', setuptools.__version__)"
-
-      - name: Scan frontend image
-        uses: aquasecurity/trivy-action@v0.36.0
+          TAG="v${{ github.run_number }}"
+          docker build -t frontend:$TAG frontend
+          docker build -t backend:$TAG backend
+      - uses: aquasecurity/trivy-action@v0.36.0
         with:
-          scan-type: image
+          scan-type: 'image'
           image-ref: frontend:v${{ github.run_number }}
-          format: table
-          severity: HIGH,CRITICAL
-          ignore-unfixed: true
+          severity: CRITICAL,HIGH
           exit-code: "1"
-          vuln-type: os,library
-          scanners: vuln
-
-      - name: Scan backend image
-        uses: aquasecurity/trivy-action@v0.36.0
+          ignore-unfixed: true
+      - uses: aquasecurity/trivy-action@v0.36.0
         with:
-          scan-type: image
+          scan-type: 'image'
           image-ref: backend:v${{ github.run_number }}
-          format: table
-          severity: HIGH,CRITICAL
-          ignore-unfixed: true
+          severity: CRITICAL,HIGH
           exit-code: "1"
-          vuln-type: os,library
-          scanners: vuln
-
+          ignore-unfixed: true
 
   push-ecr:
-    name: Push Images to Amazon ECR
+    name: Push to ECR
     runs-on: ubuntu-latest
-    needs: scan
-
+    needs: [build, scan]
     steps:
-      - name: Checkout source code
-        uses: actions/checkout@v4
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v5
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v5
         with:
-          role-to-assume: ${{ env.AWS_GITHUB_ROLE_ARN }}
+          role-to-assume: ${{ env.AWS_GITHUB_ROLE_ARN  }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Login to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Create ECR repositories
+      # This must be its own step with a separate dash (-)
+      - name: Build and Push Images to ECR
         run: |
-          aws ecr describe-repositories \
-            --repository-names "$FRONTEND_REPOSITORY" \
-            --region "$AWS_REGION" \
-          || aws ecr create-repository \
-            --repository-name "$FRONTEND_REPOSITORY" \
-            --region "$AWS_REGION"
-
-          aws ecr describe-repositories \
-            --repository-names "$BACKEND_REPOSITORY" \
-            --region "$AWS_REGION" \
-          || aws ecr create-repository \
-            --repository-name "$BACKEND_REPOSITORY" \
-            --region "$AWS_REGION"
-
-      - name: Build and push frontend image
-        run: |
-          IMAGE_TAG="v${GITHUB_RUN_NUMBER}"
-
-          docker build --pull --no-cache \
-            -t "$ECR_REGISTRY/$FRONTEND_REPOSITORY:$IMAGE_TAG" \
-            -t "$ECR_REGISTRY/$FRONTEND_REPOSITORY:latest" \
-            frontend
-
-          docker push "$ECR_REGISTRY/$FRONTEND_REPOSITORY:$IMAGE_TAG"
+          VERSION_TAG="v${{ github.run_number }}"
+          
+          # 1. Automatically create ECR repositories if they do not exist yet
+          echo "Checking/creating ECR repositories..."
+          aws ecr create-repository --repository-name "$FRONTEND_REPOSITORY" --region "$AWS_REGION" || echo "Frontend repository already exists."
+          aws ecr create-repository --repository-name "$BACKEND_REPOSITORY" --region "$AWS_REGION" || echo "Backend repository already exists."
+          # 2. Build and push Frontend with both tags
+          echo "Building and pushing Frontend..."
+          docker build -t "$ECR_REGISTRY/$FRONTEND_REPOSITORY:$VERSION_TAG" -t "$ECR_REGISTRY/$FRONTEND_REPOSITORY:latest" frontend
+          docker push "$ECR_REGISTRY/$FRONTEND_REPOSITORY:$VERSION_TAG"
           docker push "$ECR_REGISTRY/$FRONTEND_REPOSITORY:latest"
-
-      - name: Build and push backend image
-        run: |
-          IMAGE_TAG="v${GITHUB_RUN_NUMBER}"
-
-          docker build --pull --no-cache \
-            -t "$ECR_REGISTRY/$BACKEND_REPOSITORY:$IMAGE_TAG" \
-            -t "$ECR_REGISTRY/$BACKEND_REPOSITORY:latest" \
-            backend
-
-          docker push "$ECR_REGISTRY/$BACKEND_REPOSITORY:$IMAGE_TAG"
+          # 3. Build and push Backend with both tags
+          echo "Building and pushing Backend..."
+          docker build -t "$ECR_REGISTRY/$BACKEND_REPOSITORY:$VERSION_TAG" -t "$ECR_REGISTRY/$BACKEND_REPOSITORY:latest" backend
+          docker push "$ECR_REGISTRY/$BACKEND_REPOSITORY:$VERSION_TAG"
           docker push "$ECR_REGISTRY/$BACKEND_REPOSITORY:latest"
-
-
   update-gitops:
-    name: Update GitOps Repository
+    name: Update CD Repository
     runs-on: ubuntu-latest
     needs: push-ecr
-
     steps:
-      - name: Checkout GitOps repository
+      - name: Checkout CD repository
         uses: actions/checkout@v4
         with:
           repository: ${{ env.CD_REPOSITORY }}
@@ -237,28 +132,17 @@ jobs:
           path: cd-repo
 
       - name: Update image tags
-        working-directory: cd-repo
+        env:
+          TAG: ${{ github.sha }}
         run: |
-          IMAGE_TAG="v${GITHUB_RUN_NUMBER}"
-
-          sed -i "s/^  tag:.*/  tag: \"$IMAGE_TAG\"/" \
-            environments/dev/frontend-values.yaml
-
-          sed -i "s/^  tag:.*/  tag: \"$IMAGE_TAG\"/" \
-            environments/dev/backend-values.yaml
-
-      - name: Commit and push GitOps changes
+          TAG="${TAG::12}"
+          sed -i "s/tag:.*/tag: $TAG/" cd-repo/environments/dev/frontend-values.yaml
+          sed -i "s/tag:.*/tag: $TAG/" cd-repo/environments/dev/backend-values.yaml
+      - name: Commit GitOps change
         working-directory: cd-repo
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-          git add \
-            environments/dev/frontend-values.yaml \
-            environments/dev/backend-values.yaml
-
-          git commit \
-            -m "chore: deploy image v${GITHUB_RUN_NUMBER}" \
-            || echo "No changes to commit"
-
+          git add environments/dev/frontend-values.yaml environments/dev/backend-values.yaml
+          git commit -m "chore: deploy image ${GITHUB_SHA::12}" || exit 0
           git push
